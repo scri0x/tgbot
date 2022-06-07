@@ -1,7 +1,5 @@
 import sqlite3
 
-<<<<<<< HEAD
-
 def college(idk, lang):
     conn = sqlite3.connect('databases/bachelor.db')
     cur = conn.cursor()
@@ -46,7 +44,6 @@ def insert_users(user_id, lang):
     conn = sqlite3.connect('databases/users.db')
     cur = conn.cursor()
 
-    print(user_id,lang)
     cur.execute(f"INSERT INTO user (user_id, lang) VALUES ({user_id},'{lang}')")
     conn.commit()
 
@@ -131,8 +128,6 @@ def price(subject, lang):
     conn.close()
     return text
 
-=======
->>>>>>> cd6c07a1ebc59d6be775c95af970b30c2f2da0e5
 def subject_ball_from_bd(subject, year, lang):
     conn = sqlite3.connect('databases/bachelor.db')
     cur = conn.cursor()
@@ -155,9 +150,8 @@ def subject_ball_from_bd(subject, year, lang):
                 text = text + "-" + spec[1] + "-\n"  # подумай
         text = text + f"Бакалавриатқа бөлінген грант саны:{group[2]}\nЖалпы конкурс бойынша грантқа түскен минималды балл:{group[3]}\nАуылдық квотамен грантқа түскен минималды балл:{group[4]}\n\n"
     conn.close()
-<<<<<<< HEAD
+
     return text, tables
-=======
     return text, tables
 
 
@@ -222,4 +216,14 @@ def doctoranture(idk, lang):
         text = text + '\n'
     conn.close()
     return text
->>>>>>> cd6c07a1ebc59d6be775c95af970b30c2f2da0e5
+
+
+def delete_user(user_id):
+    conn = sqlite3.connect('databases/users.db')
+    cur = conn.cursor()
+
+    cur.execute(
+        f"DELETE FROM user WHERE user_id = {user_id}"
+    )
+    conn.commit()
+    conn.close()
