@@ -19,8 +19,10 @@ all_button = {'bkz': bt.subject_values_kz, 'bru': bt.subject_values_ru, 'mkz': b
               'ckz': bt.college_buttons_kz, 'cru': bt.college_buttons_ru, 'pkz': bt.subject_price_kz,
               'pru': bt.subject_price_ru}
 
+
 class start_wait(StatesGroup):
     waiting_for_lang = State()
+
 
 class subject_wait(StatesGroup):
     waiting_for_subjects = State()
@@ -46,21 +48,25 @@ async def cmd_discount(call):
     buttons = bt.buttons_for_discount
     keyboard = types.InlineKeyboardMarkup()
     keyboard.add(*buttons)
+    try:
+        match (str(type(call))):
+            case "<class 'aiogram.types.message.Message'>":
+                data = db.discount_drom_bd('100%', lang(call.from_user.id))
+                await call.answer(text=data, reply_markup=keyboard)
+            case "<class 'aiogram.types.callback_query.CallbackQuery'>":  # Если предыдущий текст равен тексту на замену ОШИБКА
+                try:
+                    data = db.discount_drom_bd(call.data, lang(call.from_user.id))
+                    await bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                                text=data,
+                                                reply_markup=keyboard)
+                    await bot.answer_callback_query(callback_query_id=call.id)
+                except aiogram.utils.exceptions.MessageNotModified:
+                    await bot.answer_callback_query(callback_query_id=call.id)
+    except IndexError:
+        await call.message.answer("Вы не зарегистрированы. Введите команду '/start' и выберите язык")
 
-    match (str(type(call))):
-        case "<class 'aiogram.types.message.Message'>":
-            data = db.discount_drom_bd('100%', lang(call.from_user.id))
-            await call.answer(text=data, reply_markup=keyboard)
-        case "<class 'aiogram.types.callback_query.CallbackQuery'>":  # Если предыдущий текст равен тексту на замену ОШИБКА
-            try:
-                data = db.discount_drom_bd(call.data, lang(call.from_user.id))
-                await bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=data,
-                                            reply_markup=keyboard)
-                await bot.answer_callback_query(callback_query_id=call.id)
-            except aiogram.utils.exceptions.MessageNotModified:
-                await bot.answer_callback_query(callback_query_id=call.id)
 
-async def cmd_menu_start(call: types.CallbackQuery,state: FSMContext):
+async def cmd_menu_start(call: types.CallbackQuery, state: FSMContext):
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
 
     match call.data:
@@ -70,7 +76,6 @@ async def cmd_menu_start(call: types.CallbackQuery,state: FSMContext):
         case '/ru':
             await db.insert_users(call.from_user.id, 'ru')
             await call.message.answer('Вы выбрали русский язык')
-
 
     match lang(call.from_user.id):
         case "kz":
@@ -82,16 +87,20 @@ async def cmd_menu_start(call: types.CallbackQuery,state: FSMContext):
     await state.finish()
     await bot.answer_callback_query(callback_query_id=call.id)
 
+
 async def cmd_menu(user_press: types.Message, state: FSMContext = None):
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
 
-    match lang(user_press.from_user.id):
-        case "kz":
-            keyboard.add(*bt.buttons_kz)
-            await user_press.answer("Әрекетті таңдаңыз", reply_markup=keyboard)
-        case "ru":
-            keyboard.add(*bt.buttons_ru)
-            await user_press.answer("Выберите действие", reply_markup=keyboard)
+    try:
+        match lang(user_press.from_user.id):
+            case "kz":
+                keyboard.add(*bt.buttons_kz)
+                await user_press.answer("Әрекетті таңдаңыз", reply_markup=keyboard)
+            case "ru":
+                keyboard.add(*bt.buttons_ru)
+                await user_press.answer("Выберите действие", reply_markup=keyboard)
+    except IndexError:
+        await user_press.answer("Вы не зарегистрированы. Введите команду '/start' и выберите язык")
 
     if state != None:
         await state.finish()
@@ -120,12 +129,16 @@ async def subject_balls(user_press):
                 return
             subject_and_year = user_press.text.split('/')
             otvet = user_press.answer
-            answer_callback = None
+            await bot.send_document(user_press.chat.id, open(f'subject_{lang(user_press.from_user.id)}/'
+                                                                f'{user_press.text}.pdf', 'rb'))
         case "<class 'aiogram.types.callback_query.CallbackQuery'>":  # для типа callback
             subject_and_year = user_press.data.split('/')
             subject_and_year[0] = values[keys.index(subject_and_year[0])]
             otvet = user_press.message.answer
-            answer = bot.answer_callback_query(callback_query_id=user_press.id)
+            if len(subject_and_year) == 1:
+                await bot.send_document(user_press.message.chat.id, open(f'subject_{lang(user_press.from_user.id)}/'
+                                                                            f'{subject_and_year[0]}.pdf', 'rb'))
+            await bot.answer_callback_query(callback_query_id=user_press.id)
 
     try:
         subject_and_year[1]
@@ -141,13 +154,13 @@ async def subject_balls(user_press):
     year = {'kz': 'жыл', 'ru': 'год'}
     for list_year in data[1]:
         buttons.append(types.InlineKeyboardButton(text=f"{str(list_year[0])[5:]} {year[lang(user_press.from_user.id)]}",
-                                                  callback_data=keys[values.index(subject_and_year[0])] + '/' + str(
-                                                      list_year[0])[5:]))
+                                                  callback_data=keys[values.index(subject_and_year[0])] + '/' +
+                                                                str(list_year[0])[5:]))
     keyboard.add(*buttons)
-    await otvet(data[0], reply_markup=keyboard, parse_mode="html")
-
-    if answer:
-        await answer
+    try:
+        await otvet(data[0], reply_markup=keyboard, parse_mode="html")
+    except IndexError:
+        await user_press.answer("Вы не зарегистрированы. Введите команду '/start' и выберите язык")
 
 
 async def cmd_price_items(message: types.Message):
@@ -186,8 +199,11 @@ async def cmd_magistracy_items(message: types.Message):
 async def magistracy(message: types.Message):
     if message.text not in all_button['m' + lang(message.from_user.id)]:
         return
-    data = db.magistracy(message.text, lang(message.from_user.id))
-    await message.answer(data, parse_mode="html")
+    if message.text in ['Отправить магистратуру через PDF', 'Магистратураны PDF арқылы жіберу']:
+        await bot.send_document(message.chat.id, open('magistracy_doctoranture/Магистратура.pdf', 'rb'))
+    else:
+        data = db.magistracy(message.text, lang(message.from_user.id))
+        await message.answer(data, parse_mode="html")
 
 
 async def cmd_doctoranture_items(message: types.Message):
@@ -206,8 +222,11 @@ async def cmd_doctoranture_items(message: types.Message):
 async def doctoranture(message: types.Message):
     if message.text not in all_button['d' + lang(message.from_user.id)]:
         return
-    data = db.doctoranture(message.text, lang(message.from_user.id))
-    await message.answer(data, parse_mode="html")
+    if message.text in ['Отправить докторантуру через PDF', 'Докторантураны PDF арқылы жіберу']:
+        await bot.send_document(message.chat.id, open('magistracy_doctoranture/Докторантура.pdf', 'rb'))
+    else:
+        data = db.doctoranture(message.text, lang(message.from_user.id))
+        await message.answer(data, parse_mode="html")
 
 
 async def cmd_college_items(message: types.Message):
@@ -232,7 +251,7 @@ async def college(message: types.Message):
 
 async def cmd_start(message: types.message):
     try:
-        db.get_lang(message.from_user.id)
+        lang(message.from_user.id)
         await cmd_menu(message)
     except IndexError:
         buttons = [
@@ -250,12 +269,11 @@ async def cmd_start(message: types.message):
         await start_wait.waiting_for_lang.set()
 
 
-
 async def language(user):
     match (str(type(user))):
         case "<class 'aiogram.types.message.Message'>":
             try:
-                db.get_lang(user.from_user.id)
+                lang(user.from_user.id)
                 match user.text:
                     case '/kz':
                         db.update_lang(user.from_user.id, 'kz')
@@ -308,6 +326,46 @@ async def short_subject(message: types.message):
             await message.answer("Выберите один профильный предмет", reply_markup=keyboard)
 
 
+async def cmd_geolocation(message: types.Message):
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+
+    match lang(message.from_user.id):
+        case "ru":
+            buttons = [
+                types.InlineKeyboardButton(text="1 Корпус", url="https://goo.gl/maps/xp3VypLLNsuLW8jEA"),
+                types.InlineKeyboardButton(text="2 Корпус", url="https://goo.gl/maps/QE1pecsT7p7PMK4C9"),
+                types.InlineKeyboardButton(text="3 Корпус", url="https://goo.gl/maps/odS2XEjmiYBR8pp59"),
+                types.InlineKeyboardButton(text="4 Корпус", url="https://goo.gl/maps/mwcpoZ4R3aFbUQ8j6"),
+                types.InlineKeyboardButton(text="5 Корпус", url='https://goo.gl/maps/gFQ95qr8REu9uSNG6'),
+                types.InlineKeyboardButton(text="6 Корпус", url="https://goo.gl/maps/VhMHUtxPmj5WuHTp8"),
+                types.InlineKeyboardButton(text="7 Корпус", url="https://goo.gl/maps/DLXiX1NEzUNMWgd7A"),
+                # types.InlineKeyboardButton(text="8 Корпус", url=""),
+                types.InlineKeyboardButton(text="9 Корпус", url="https://goo.gl/maps/WLbZkTRML7vxcGR78"),
+                types.InlineKeyboardButton(text="Главный Корпус", url='https://goo.gl/maps/AEezyGb9xuAkNqzW6'),
+            ]
+            keyboard.add(*buttons)
+            await message.answer(text='Выберите корпус который вас интересует', reply_markup=keyboard)
+        case "kz":
+            buttons = [
+                types.InlineKeyboardButton(text="1 Ғимарат", url="https://goo.gl/maps/xp3VypLLNsuLW8jEA"),
+                types.InlineKeyboardButton(text="2 Ғимарат", url="https://goo.gl/maps/QE1pecsT7p7PMK4C9"),
+                types.InlineKeyboardButton(text="3 Ғимарат", url="https://goo.gl/maps/odS2XEjmiYBR8pp59"),
+                types.InlineKeyboardButton(text="4 Ғимарат", url="https://goo.gl/maps/mwcpoZ4R3aFbUQ8j6"),
+                types.InlineKeyboardButton(text="5 Ғимарат", url='https://goo.gl/maps/gFQ95qr8REu9uSNG6'),
+                types.InlineKeyboardButton(text="6 Ғимарат", url="https://goo.gl/maps/VhMHUtxPmj5WuHTp8"),
+                types.InlineKeyboardButton(text="7 Ғимарат", url="https://goo.gl/maps/DLXiX1NEzUNMWgd7A"),
+                # types.InlineKeyboardButton(text="8 Корпус", url=""),
+                types.InlineKeyboardButton(text="9 Ғимарат", url="https://goo.gl/maps/WLbZkTRML7vxcGR78"),
+                types.InlineKeyboardButton(text="Негізгі Ғимарат", url='https://goo.gl/maps/AEezyGb9xuAkNqzW6'),
+            ]
+            keyboard.add(*buttons)
+            await message.answer(text='Сізді қызықтыратын ғимаратты таңдаңыз', reply_markup=keyboard)
+
+
+async def devs(message: types.Message):
+    await message.answer("Разработчики Apolon:\nПак Руслан\nРазваляев Владимир\nТурарулы Жандос")
+
+
 def register_handlers_subjects(dp: Dispatcher):
     dp.register_message_handler(cmd_ask_ques, text=["❓Задать вопрос❓", "❓Сұрағыңыз бар ма?❓"])
 
@@ -344,4 +402,10 @@ def register_handlers_subjects(dp: Dispatcher):
                                                          "🏢Колледж - ҰБТ - Мамандықтары🏢"], state="*")
     dp.register_message_handler(college, state=college_wait.waiting_for_subjects)
 
-    dp.register_message_handler(short_subject, lambda message: any(map(message.text.lower().__contains__, bt.subject_short)))
+    dp.register_message_handler(short_subject, lambda message: any(map(message.text.lower().__contains__,
+                                                                       bt.subject_short)))
+
+    dp.register_message_handler(cmd_geolocation, lambda message: 'ғимарат' in message.text.lower() or
+                                                                 'корпус' in message.text.lower())
+
+    dp.register_message_handler(devs, commands='devs')

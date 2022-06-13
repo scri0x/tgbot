@@ -73,7 +73,6 @@ def discount_drom_bd(percent, lang):
 def magistracy(idk, lang):
     conn = sqlite3.connect('databases/magistracy.db')
     cur = conn.cursor()
-    print(idk)
 
     cur.execute(
         f"SELECT groups.nomer, groups.name_{lang} FROM groups JOIN areas ON groups.area_nomer = areas.nomer JOIN idk ON areas.idk_nomer = idk.nomer WHERE idk.name_{lang} = '{idk}';")
